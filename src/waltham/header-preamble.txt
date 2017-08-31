@@ -48,7 +48,7 @@ struct wthp_seat;
 struct wthp_surface;
 struct wthp_touch;
 
-struct ivi_surface;
-struct ivi_application;
+struct wthp_ivi_surface;
+struct wthp_ivi_application;
 
 struct dummy;

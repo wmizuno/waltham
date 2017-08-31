@@ -1743,11 +1743,11 @@
     </event>
   </interface>
 
-  <interface name="ivi_surface" version="1">
+  <interface name="wthp_ivi_surface" version="1">
     <description summary="application interface to surface in ivi compositor"/>
 
     <request name="destroy" type="destructor">
-      <description summary="destroy ivi_surface">
+      <description summary="destroy wthp_ivi_surface">
         This removes link from ivi_id to wthp_surface and destroys ivi_surface.
         The ID, ivi_id, is free and can be used for surface_create again.
       </description>
@@ -1772,7 +1772,7 @@
     </event>
   </interface>
 
-  <interface name="ivi_application" version="1">
+  <interface name="wthp_ivi_application" version="1">
     <description summary="create ivi-style surfaces">
       This interface is exposed as a global singleton.
       This interface is implemented by servers that provide IVI-style user interfaces.
@@ -1809,7 +1809,7 @@
       </description>
       <arg name="ivi_id" type="uint"/>
       <arg name="surface" type="object" interface="wthp_surface"/>
-      <arg name="id" type="new_id" interface="ivi_surface"/>
+      <arg name="id" type="new_id" interface="wthp_ivi_surface"/>
     </request>
 
   </interface>

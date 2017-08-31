@@ -93,14 +93,15 @@ struct surface {
 	struct wl_list link; /* struct client::surface_list */
 };
 
+/* wthp_ivi_surface protocol object */
 struct ivisurface {
-	struct ivi_surface *obj;
+	struct wthp_ivi_surface *obj;
 	struct surface *surf;
 };
 
-/* ivi_application protocol object */
+/* wthp_ivi_application protocol object */
 struct application {
-	struct ivi_application *obj;
+	struct wthp_ivi_application *obj;
 	struct client *client;
 	struct wl_list link; /* struct client::surface_list */
 };
@@ -353,22 +354,22 @@ client_bind_blob_factory(struct client *c, struct wthp_blob_factory *obj)
 }
 
 static void
-ivi_surface_destroy(struct ivi_surface * ivi_surface)
+wthp_ivi_surface_destroy(struct wthp_ivi_surface *ivi_surface)
 {
 	struct ivisurface *ivisurf =
 		wth_object_get_user_data((struct wth_object *)ivi_surface);
 	free(ivisurf);
 }
 
-static const struct ivi_surface_interface ivi_surface_implementation = {
-	ivi_surface_destroy
+static const struct wthp_ivi_surface_interface ivi_surface_implementation = {
+	wthp_ivi_surface_destroy
 };
 
 static void
-ivi_surface_create(struct ivi_application * ivi_application, uint32_t ivi_id,
-		   struct wthp_surface * wthp_surface, struct ivi_surface * obj)
+wthp_ivi_application_surface_create(struct wthp_ivi_application *ivi_application, uint32_t ivi_id,
+		   struct wthp_surface *wthp_surface, struct wthp_ivi_surface *obj)
 {
-	fprintf(stderr, "ivi_application %p surface_create(%d, %p, %p)\n",
+	fprintf(stderr, "wthp_ivi_application %p surface_create(%d, %p, %p)\n",
 		ivi_application, ivi_id, wthp_surface, obj);
 	struct surface *surface = wth_object_get_user_data((struct wth_object *)wthp_surface);
 	struct application *app = wth_object_get_user_data((struct wth_object *)ivi_application);
@@ -384,16 +385,16 @@ ivi_surface_create(struct ivi_application * ivi_application, uint32_t ivi_id,
 	ivisurf->obj = obj;
 	ivisurf->surf = surface;
 
-	ivi_surface_set_interface(obj, &ivi_surface_implementation,
+	wthp_ivi_surface_set_interface(obj, &ivi_surface_implementation,
 				  ivisurf);
 }
 
-static const struct ivi_application_interface ivi_application_implementation = {
-	ivi_surface_create
+static const struct wthp_ivi_application_interface wthp_ivi_application_implementation = {
+	wthp_ivi_application_surface_create
 };
 
 static void
-client_bind_ivi_application(struct client *c, struct ivi_application *obj)
+client_bind_wthp_ivi_application(struct client *c, struct wthp_ivi_application *obj)
 {
 	struct application *app;
 
@@ -407,9 +408,9 @@ client_bind_ivi_application(struct client *c, struct ivi_application *obj)
 	app->client = c;
 	wl_list_insert(&c->compositor_list, &app->link);
 
-	ivi_application_set_interface(obj, &ivi_application_implementation,
+	wthp_ivi_application_set_interface(obj, &wthp_ivi_application_implementation,
 					 app);
-	fprintf(stderr, "client %p bound ivi_application\n", c);
+	fprintf(stderr, "client %p bound wthp_ivi_application\n", c);
 }
 /* END wthp_blob_factory implementation */
 
@@ -581,8 +582,8 @@ registry_handle_bind(struct wthp_registry *registry,
 		client_bind_compositor(reg->client, (struct wthp_compositor *)id);
 	} else if (strcmp(interface, "wthp_blob_factory") == 0) {
 		client_bind_blob_factory(reg->client, (struct wthp_blob_factory *)id);
-	} else if (strcmp(interface, "ivi_application") == 0) {
-		client_bind_ivi_application(reg->client, (struct ivi_application *)id);
+	} else if (strcmp(interface, "wthp_ivi_application") == 0) {
+		client_bind_wthp_ivi_application(reg->client, (struct wthp_ivi_application *)id);
 	} else {
 		wth_object_post_error((struct wth_object *)registry, 0,
 				      "%s: unknown name %u", __func__, name);
@@ -641,7 +642,7 @@ display_handle_get_registry(struct wth_display *wth_display,
 	/* XXX: advertise our globals */
 	wthp_registry_send_global(registry, 1, "wthp_compositor", 4);
 	wthp_registry_send_global(registry, 1, "wthp_blob_factory", 4);
-	wthp_registry_send_global(registry, 1, "ivi_application", 1);
+	wthp_registry_send_global(registry, 1, "wthp_ivi_application", 1);
 }
 
 static const struct wth_display_interface display_implementation = {
