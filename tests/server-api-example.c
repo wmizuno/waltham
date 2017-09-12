@@ -233,8 +233,8 @@ surface_handle_commit(struct wthp_surface *wthp_surface)
         fprintf(stderr, "commit %p\n",
                 wthp_surface);
 
-        wthp_callback_send_done(surface->cb, surface->ivi_id);
-	wthp_callback_free(surface->cb);
+        //wthp_callback_send_done(surface->cb, surface->ivi_id);
+	//wthp_callback_free(surface->cb);
 }
 
 static void
