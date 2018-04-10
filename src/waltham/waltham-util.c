@@ -34,6 +34,8 @@
 #include "waltham-connection.h"
 #include "waltham-private.h"
 
+int debug_message;
+
 static void
 wth_pfx_print(const char *pfx, const char *fmt, va_list argp)
 {
@@ -48,10 +50,12 @@ void
 wth_debug(const char *fmt, ...)
 {
 	va_list argp;
-
-	va_start(argp, fmt);
-	wth_pfx_print("debug", fmt, argp);
-	va_end(argp);
+	
+	if(debug_message == 1) {
+		va_start(argp, fmt);
+		wth_pfx_print("debug", fmt, argp);
+		va_end(argp);
+	}
 }
 
 void

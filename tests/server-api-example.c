@@ -66,6 +66,46 @@ struct compositor {
 	struct wl_list link; /* struct client::compositor_list */
 };
 
+/* wthp_blob_factory protocol object */
+struct blob_factory {
+	struct wthp_blob_factory *obj;
+	struct client *client;
+	struct wl_list link; /* struct client::blob_factory_list */
+};
+
+/* wthp_buffer protocol object */
+struct buffer {
+	struct wthp_buffer *obj;
+	uint32_t data_sz;
+	void *data;
+	int32_t width;
+	int32_t height;
+	int32_t stride;
+	uint32_t format;
+	struct wl_list link; /* struct client::blob_factory_list */
+};
+
+/* wthp_surface protocol object */
+struct surface {
+	struct wthp_surface *obj;
+	uint32_t ivi_id;
+	struct wthp_callback *cb;
+	struct wl_list link; /* struct client::surface_list */
+};
+
+/* wthp_ivi_surface protocol object */
+struct ivisurface {
+	struct wthp_ivi_surface *obj;
+	struct surface *surf;
+};
+
+/* wthp_ivi_application protocol object */
+struct application {
+	struct wthp_ivi_application *obj;
+	struct client *client;
+	struct wl_list link; /* struct client::surface_list */
+};
+
 /* wthp_registry protocol object */
 struct registry {
 	struct wthp_registry *obj;
@@ -81,9 +121,12 @@ struct client {
 	struct watch conn_watch;
 
 	/* client object lists for clean-up on disconnection */
-	struct wl_list registry_list;   /* struct registry::link */
-	struct wl_list compositor_list; /* struct compositor::link */
-	struct wl_list region_list;     /* struct region::link */
+	struct wl_list registry_list;     /* struct registry::link */
+	struct wl_list compositor_list;   /* struct compositor::link */
+	struct wl_list region_list;       /* struct region::link */
+	struct wl_list surface_list;      /* struct surface::link */
+	struct wl_list blob_factory_list; /* struct blob_factory::link */
+	struct wl_list buffer_list; /* struct blob_factory::link */
 };
 
 struct server {
@@ -115,6 +158,261 @@ client_post_out_of_memory(struct client *c)
 	wth_object_post_error((struct wth_object *)disp, 1,
 			      "out of memory");
 }
+
+/* BEGIN wthp_surface implementation */
+
+static void
+surface_destroy(struct surface *surface)
+{
+        fprintf(stderr, "surface %p destroy\n", surface->obj);
+
+        wthp_surface_free(surface->obj);
+        wl_list_remove(&surface->link);
+        free(surface);
+}
+
+static void
+surface_handle_destroy(struct wthp_surface *wthp_surface)
+{
+	struct surface *surface = wth_object_get_user_data((struct wth_object *)wthp_surface);
+
+	assert(wthp_surface == surface->obj);
+
+	surface_destroy(surface);
+}
+
+static void
+surface_handle_attach(struct wthp_surface *wthp_surface,
+		      struct wthp_buffer *buffer, int32_t x, int32_t y)
+{
+        fprintf(stderr, "surface %p attach(%p, %d, %d)\n",
+                wthp_surface, buffer, x, y);
+
+	wthp_buffer_send_complete(buffer, 0);
+}
+
+static void
+surface_handle_damage(struct wthp_surface *wthp_surface,
+		      int32_t x, int32_t y, int32_t width, int32_t height)
+{
+        fprintf(stderr, "surface %p damage(%d, %d, %d, %d)\n",
+                wthp_surface, x, y, width, height);
+}
+
+static void
+surface_handle_frame(struct wthp_surface *wthp_surface,
+		     struct wthp_callback *callback)
+{
+	struct surface *surface = wth_object_get_user_data((struct wth_object *)wthp_surface);
+        fprintf(stderr, "surface %p callback(%p)\n",
+                wthp_surface, callback);
+
+        surface->cb = callback;
+}
+
+static void
+surface_handle_set_opaque_region(struct wthp_surface *wthp_surface,
+				 struct wthp_region *region)
+{
+        fprintf(stderr, "surface %p set_opaque_region(%p)\n",
+                wthp_surface, region);
+}
+
+static void
+surface_handle_set_input_region(struct wthp_surface *wthp_surface,
+				 struct wthp_region *region)
+{
+        fprintf(stderr, "surface %p set_input_region(%p)\n",
+                wthp_surface, region);
+}
+
+static void
+surface_handle_commit(struct wthp_surface *wthp_surface)
+{
+	struct surface *surface = wth_object_get_user_data((struct wth_object *)wthp_surface);
+        fprintf(stderr, "commit %p\n",
+                wthp_surface);
+
+        //wthp_callback_send_done(surface->cb, surface->ivi_id);
+	//wthp_callback_free(surface->cb);
+}
+
+static void
+surface_handle_set_buffer_transform(struct wthp_surface *wthp_surface,
+				    int32_t transform)
+{
+        fprintf(stderr, "surface %p et_buffer_transform(%d)\n",
+                wthp_surface, transform);
+}
+
+static void
+surface_handle_set_buffer_scale(struct wthp_surface *wthp_surface,
+				int32_t scale)
+{
+        fprintf(stderr, "surface %p set_buffer_scale(%d)\n",
+                wthp_surface, scale);
+}
+
+static void
+surface_handle_damage_buffer(struct wthp_surface *wthp_surface,
+			     int32_t x, int32_t y, int32_t width, int32_t height)
+{
+        fprintf(stderr, "surface %p damage_buffer(%d, %d, %d, %d)\n",
+                wthp_surface, x, y, width, height);
+}
+
+static const struct wthp_surface_interface surface_implementation = {
+	surface_handle_destroy,
+	surface_handle_attach,
+	surface_handle_damage,
+	surface_handle_frame,
+	surface_handle_set_opaque_region,
+	surface_handle_set_input_region,
+	surface_handle_commit,
+	surface_handle_set_buffer_transform,
+	surface_handle_set_buffer_scale,
+	surface_handle_damage_buffer
+};
+
+/* END wthp_cwsurfaceregion implementation */
+
+/* BEGIN wthp_region implementation */
+
+static void
+buffer_handle_destroy(struct wthp_buffer *wthp_buffer)
+{
+	struct buffer *buf = wth_object_get_user_data((struct wth_object *)wthp_buffer);
+
+	fprintf(stderr, "buffer %p destroy\n", buf->obj);
+
+	wthp_buffer_free(wthp_buffer);
+	wl_list_remove(&buf->link);
+//	free(buf->data);
+	free(buf);
+}
+
+static const struct wthp_buffer_interface buffer_implementation = {
+	buffer_handle_destroy
+};
+
+/* END wthp_region implementation */
+
+/* BEGIN wthp_blob_factory implementation */
+
+static void
+blob_factory_create_buffer(struct wthp_blob_factory *blob_factory,
+			   struct wthp_buffer *wthp_buffer, uint32_t data_sz, void *data,
+			   int32_t width, int32_t height, int32_t stride, uint32_t format)
+{
+	fprintf(stderr, "wthp_blob_factory %p create_buffer(%p, %d, %p, %d, %d, %d, %d)\n",
+		blob_factory, wthp_buffer, data_sz, data, width, height, stride, format);
+
+	struct blob_factory *blob = wth_object_get_user_data((struct wth_object *)blob_factory);
+	struct buffer *buffer;
+
+	buffer = zalloc(sizeof *buffer);
+	if (!buffer) {
+		client_post_out_of_memory(blob->client);
+		return;
+	}
+
+	wl_list_insert(&blob->client->buffer_list, &buffer->link);
+
+	buffer->data_sz = data_sz;
+	buffer->data = data;
+	buffer->width = width;
+	buffer->height = height;
+	buffer->stride = stride;
+	buffer->format = format;
+	buffer->obj = wthp_buffer;
+
+	wthp_buffer_set_interface(wthp_buffer, &buffer_implementation, buffer);
+}
+
+static const struct wthp_blob_factory_interface blob_factory_implementation = {
+	blob_factory_create_buffer
+};
+
+static void
+client_bind_blob_factory(struct client *c, struct wthp_blob_factory *obj)
+{
+	struct blob_factory *blob;
+
+	blob = zalloc(sizeof *blob);
+	if (!blob) {
+		client_post_out_of_memory(c);
+		return;
+	}
+
+	blob->obj = obj;
+	blob->client = c;
+	wl_list_insert(&c->compositor_list, &blob->link);
+
+	wthp_blob_factory_set_interface(obj, &blob_factory_implementation,
+					 blob);
+	fprintf(stderr, "client %p bound wthp_blob_factory\n", c);
+}
+
+static void
+wthp_ivi_surface_destroy(struct wthp_ivi_surface *ivi_surface)
+{
+	struct ivisurface *ivisurf =
+		wth_object_get_user_data((struct wth_object *)ivi_surface);
+	free(ivisurf);
+}
+
+static const struct wthp_ivi_surface_interface ivi_surface_implementation = {
+	wthp_ivi_surface_destroy
+};
+
+static void
+wthp_ivi_application_surface_create(struct wthp_ivi_application *ivi_application, uint32_t ivi_id,
+		   struct wthp_surface *wthp_surface, struct wthp_ivi_surface *obj)
+{
+	fprintf(stderr, "wthp_ivi_application %p surface_create(%d, %p, %p)\n",
+		ivi_application, ivi_id, wthp_surface, obj);
+	struct surface *surface = wth_object_get_user_data((struct wth_object *)wthp_surface);
+	struct application *app = wth_object_get_user_data((struct wth_object *)ivi_application);
+
+	struct ivisurface *ivisurf;
+
+	ivisurf = zalloc(sizeof *ivisurf);
+	if (!ivisurf) {
+		return;
+	}
+
+	surface->ivi_id = ivi_id;
+	ivisurf->obj = obj;
+	ivisurf->surf = surface;
+
+	wthp_ivi_surface_set_interface(obj, &ivi_surface_implementation,
+				  ivisurf);
+}
+
+static const struct wthp_ivi_application_interface wthp_ivi_application_implementation = {
+	wthp_ivi_application_surface_create
+};
+
+static void
+client_bind_wthp_ivi_application(struct client *c, struct wthp_ivi_application *obj)
+{
+	struct application *app;
+
+	app = zalloc(sizeof *app);
+	if (!app) {
+		client_post_out_of_memory(c);
+		return;
+	}
+
+	app->obj = obj;
+	app->client = c;
+	wl_list_insert(&c->compositor_list, &app->link);
+
+	wthp_ivi_application_set_interface(obj, &wthp_ivi_application_implementation,
+					 app);
+	fprintf(stderr, "client %p bound wthp_ivi_application\n", c);
+}
+/* END wthp_blob_factory implementation */
 
 /* BEGIN wthp_region implementation */
 
@@ -179,8 +477,22 @@ static void
 compositor_handle_create_surface(struct wthp_compositor *compositor,
 				 struct wthp_surface *id)
 {
-	wth_object_post_error((struct wth_object *)compositor, 0,
-			      "unimplemented: %s", __func__);
+	struct compositor *comp = wth_object_get_user_data((struct wth_object *)compositor);
+	struct surface *surface;
+
+	fprintf(stderr, "client %p create surface %p\n",
+		comp->client, id);
+
+	surface = zalloc(sizeof *surface);
+	if (!surface) {
+		client_post_out_of_memory(comp->client);
+		return;
+	}
+
+	surface->obj = id;
+	wl_list_insert(&comp->client->surface_list, &surface->link);
+
+	wthp_surface_set_interface(id, &surface_implementation, surface);
 }
 
 static void
@@ -268,6 +580,10 @@ registry_handle_bind(struct wthp_registry *registry,
 		/* XXX: check version against limits */
 		/* XXX: check that name and interface match */
 		client_bind_compositor(reg->client, (struct wthp_compositor *)id);
+	} else if (strcmp(interface, "wthp_blob_factory") == 0) {
+		client_bind_blob_factory(reg->client, (struct wthp_blob_factory *)id);
+	} else if (strcmp(interface, "wthp_ivi_application") == 0) {
+		client_bind_wthp_ivi_application(reg->client, (struct wthp_ivi_application *)id);
 	} else {
 		wth_object_post_error((struct wth_object *)registry, 0,
 				      "%s: unknown name %u", __func__, name);
@@ -325,6 +641,8 @@ display_handle_get_registry(struct wth_display *wth_display,
 
 	/* XXX: advertise our globals */
 	wthp_registry_send_global(registry, 1, "wthp_compositor", 4);
+	wthp_registry_send_global(registry, 1, "wthp_blob_factory", 4);
+	wthp_registry_send_global(registry, 1, "wthp_ivi_application", 1);
 }
 
 static const struct wth_display_interface display_implementation = {
@@ -341,6 +659,7 @@ client_destroy(struct client *c)
 	struct region *region;
 	struct compositor *comp;
 	struct registry *reg;
+	struct surface *surface;
 
 	fprintf(stderr, "Client %p disconnected.\n", c);
 
@@ -355,6 +674,9 @@ client_destroy(struct client *c)
 
 	wl_list_last_until_empty(reg, &c->registry_list, link)
 		registry_destroy(reg);
+
+	wl_list_last_until_empty(surface, &c->surface_list, link)
+		surface_destroy(surface);
 
 	wl_list_remove(&c->link);
 	watch_ctl(&c->conn_watch, EPOLL_CTL_DEL, 0);
@@ -441,6 +763,9 @@ client_create(struct server *srv, struct wth_connection *conn)
 	wl_list_init(&c->registry_list);
 	wl_list_init(&c->compositor_list);
 	wl_list_init(&c->region_list);
+	wl_list_init(&c->surface_list);
+	wl_list_init(&c->blob_factory_list);
+	wl_list_init(&c->buffer_list);
 
 	/* XXX: this should be inside Waltham */
 	disp = wth_connection_get_display(c->connection);
